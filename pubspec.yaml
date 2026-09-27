@@ -1,0 +1,32 @@
+name: hiblob
+description: >-
+  Deterministic geometric blob avatars from any string, with a pure Dart core
+  and static or animated Flutter widgets.
+version: 0.1.0
+# TODO: add your own homepage / repository URLs before publishing — pub.dev
+# rewards packages that point at a live repository.
+topics:
+  - avatar
+  - flutter
+  - deterministic
+  - generative-art
+screenshots:
+  - description: The Hiblob Studio example with appearance and motion controls.
+    path: hiblob_studio.png
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.27.0"
+
+dependencies:
+  # Dart has no built-in Unicode normalization; seeds are normalized with NFC
+  # so that decomposed and precomposed input (paste-a-name) hash identically.
+  unorm_dart: ^0.3.0
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  lints: ^5.1.1
+  test: ^1.25.0

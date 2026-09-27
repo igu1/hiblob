@@ -1,0 +1,35 @@
+{
+    "name": "Hiblob Studio",
+    "short_name": "Hiblob",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#f7f7fb",
+    "theme_color": "#6c5ce7",
+    "description": "Explore deterministic hiblobs, expressions, colors, and motion in Flutter.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

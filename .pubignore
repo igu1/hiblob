@@ -1,0 +1,18 @@
+# The parity fixtures under test/ are a repository-only artifact: they are
+# exported from the pinned TypeScript release and are ~3 MB of JSON that
+# consumers of the package never need. Excluding them keeps the published
+# archive small.
+test/
+
+# Dart/Flutter tool state. pub only consults .pubignore when it exists, and
+# .gitignore is then ignored entirely, so build output has to be listed here
+# explicitly or it ships in the archive after a local `flutter test`.
+.dart_tool/
+build/
+example/.dart_tool/
+example/build/
+doc/
+pubspec.lock
+.metadata
+.git/
+.gitignore
