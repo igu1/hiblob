@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'color.dart';
 import 'expressions.dart';
 import 'geometry.dart';
+import 'hash.dart';
 import 'options.dart';
 import 'traits.dart';
 
@@ -30,6 +31,20 @@ class EyeGroup {
 
   const EyeGroup(this.marks,
       {required this.strokeOnly, required this.cx, required this.cy});
+}
+
+/// One accessory mark and the color it is painted with.
+class Accessory {
+  final GeometryPath path;
+
+  /// ARGB color.
+  final int color;
+
+  /// Whether the accessory is painted below the eyes (for example blush
+  /// discs) or above them (for example glasses frames).
+  final bool underEyes;
+
+  const Accessory(this.path, {required this.color, this.underEyes = false});
 }
 
 /// A fully resolved, ready-to-draw hiblob.
@@ -61,6 +76,13 @@ class ResolvedHiblob {
   final List<EyeGroup> eyes;
   final int eyeColor;
 
+  /// The mouth path, or `null` when [HiblobOptions.mouth] is off or the
+  /// expression draws none.
+  final GeometryPath? mouth;
+
+  /// Deterministic accessories, in paint order.
+  final List<Accessory> accessories;
+
   const ResolvedHiblob({
     required this.name,
     required this.seed,
@@ -75,14 +97,67 @@ class ResolvedHiblob {
     required this.headColor,
     required this.eyes,
     required this.eyeColor,
+    this.mouth,
+    this.accessories = const [],
   });
+}
+
+/// One drawing step: a path and the ARGB color it is painted with.
+class DrawStep {
+  final GeometryPath path;
+
+  /// ARGB color. For stroked paths this is the stroke color.
+  final int color;
+
+  const DrawStep(this.path, this.color);
+}
+
+/// The completed draw list for [name]: every path in paint order (backdrop,
+/// body, mouth, and accessories), each with its color. Stroked paths carry
+/// their stroke color; the caller chooses stroke vs fill from
+/// [GeometryPath.stroke].
+List<DrawStep> layoutFor(String name,
+    {HiblobOptions options = const HiblobOptions()}) {
+  final resolved = resolve(name, options: options);
+  return drawStepsOf(resolved);
+}
+
+/// The body silhouette and any extra volumes ([ResolvedHiblob.body]) for
+/// [name], without palette information.
+List<GeometryPath> partsFor(String name,
+        {HiblobOptions options = const HiblobOptions()}) =>
+    resolve(name, options: options).body;
+
+/// Flattens [resolved] into a paint-order draw list — what [layoutFor]
+/// returns for a name, here applied to an already resolved figure.
+List<DrawStep> drawStepsOf(ResolvedHiblob resolved) {
+  final steps = <DrawStep>[];
+  final backdrop = resolved.backdrop;
+  if (backdrop != null) {
+    steps.add(DrawStep(backdrop, resolved.backdropColor));
+  }
+  steps.addAll(
+    [for (final part in resolved.body) DrawStep(part, resolved.headColor)],
+  );
+  final mouth = resolved.mouth;
+  if (mouth != null) {
+    steps.add(DrawStep(mouth, resolved.eyeColor));
+  }
+  for (final accessory in resolved.accessories) {
+    steps.add(DrawStep(accessory.path, accessory.color));
+  }
+  for (final eye in resolved.eyes) {
+    steps.addAll(
+        [for (final mark in eye.marks) DrawStep(mark, resolved.eyeColor)]);
+  }
+  return steps;
 }
 
 /// Resolves [name] with [options] into drawable geometry and palette.
 ResolvedHiblob resolve(String name,
     {HiblobOptions options = const HiblobOptions()}) {
   final traits = traitsFor(name, options: options);
-  final seed = options.normalize ? name.trim().toLowerCase() : name;
+  final seed = options.normalize ? normalizeSeed(name) : name;
   final shape = bandFor(traits['shape']!, shapeBands);
   final toneBand = bandFor(traits['tone']!, toneBands);
   final hue = traits['hue']! * 360;
@@ -91,6 +166,10 @@ ResolvedHiblob resolve(String name,
   final body = _body(shape, traits);
   final (eyes, eyeColor, headColor) =
       _face(shape, traits, options, hue, toneBand);
+  final mouth =
+      options.mouth ? _mouth(shape, traits, options.expression, eyes) : null;
+  final accessories =
+      _accessories(shape, name, options, traits, eyes, headColor, eyeColor);
 
   return ResolvedHiblob(
     name: name,
@@ -106,6 +185,8 @@ ResolvedHiblob resolve(String name,
     headColor: headColor,
     eyes: eyes,
     eyeColor: eyeColor,
+    mouth: mouth,
+    accessories: accessories,
   );
 }
 
@@ -190,6 +271,12 @@ List<GeometryPath> _body(String shape, Map<String, double> t) {
       ];
     case 'sun':
       return [star(cx, cy, r * 1.16, r * 0.74, 8, rotation: math.pi / 8)];
+    case 'gem':
+      return [
+        roundedPolygon(cx, cy, r * 1.10, 5, 0.12, rotation: -math.pi / 2)
+      ];
+    case 'pillow':
+      return [superellipse(cx, cy, r * 1.10, r * 0.92, 2.2)];
   }
   throw StateError('unknown shape $shape');
 }
@@ -209,6 +296,8 @@ double _halfWidthAtFace(String shape, Map<String, double> t) {
     'droplet' => r * 0.86 * 0.95,
     'cloud' => r * 0.82,
     'sun' => r * 0.74,
+    'gem' => r * 0.95,
+    'pillow' => r * 1.10,
     _ => throw StateError('unknown shape $shape'),
   };
 }
@@ -226,6 +315,8 @@ double _faceDy(String shape, Map<String, double> t) {
     'droplet' => r * 0.16 + 1.5, // inside the bulb
     'cloud' => 0.5,
     'sun' => 0.0,
+    'gem' => 1.0,
+    'pillow' => -1.0,
     _ => throw StateError('unknown shape $shape'),
   };
 }
@@ -364,17 +455,236 @@ double _faceDy(String shape, Map<String, double> t) {
         );
       }
     case 'thinking':
-      return left
-          ? ([ellipse(x, y, rx * 0.95, ry * 0.95)], false)
-          : (
-              [
-                polyline([(x: x - rx * 0.85, y: y), (x: x + rx * 0.85, y: y)])
-              ],
-              true
-            );
+      {
+        // Seesaw loop: a slow horizontal sway, driven below.
+        return left
+            ? ([ellipse(x, y, rx * 0.95, ry * 0.95)], false)
+            : (
+                [
+                  polyline([(x: x - rx * 0.85, y: y), (x: x + rx * 0.85, y: y)])
+                ],
+                true
+              );
+      }
+    case 'grin':
+      return ([ellipse(x, y, rx * 1.05, ry)], false);
+    case 'frown':
+      return ([ellipse(x, y, rx, ry * 0.9)], false);
     default: // idle
       return ([ellipse(x, y, rx, ry)], false);
   }
+}
+
+/// The mouth for [expression], centered under the eye line. `null` when the
+/// expression draws no mouth (all currently do when enabled).
+GeometryPath? _mouth(
+  String shape,
+  Map<String, double> t,
+  Expression expression,
+  List<EyeGroup> eyes,
+) {
+  final cx = 50.0;
+  final mouthTrait = t['mouth']!;
+  final eyeCy = (eyes[0].cy + eyes[1].cy) / 2;
+  final y = math
+      .min(eyeCy + 4.6 + 1.8 * mouthTrait, 50 + _bodyR(t) * 0.55)
+      .clamp(0.0, 100.0);
+  final x = cx + expression.eyeOffsetDx * 0.25;
+  // Width grows with the mouth trait but stays well inside the silhouette.
+  final half = math.min(
+    2.5 + 3.6 * mouthTrait,
+    _halfWidthAtFace(shape, t) * 0.72,
+  );
+  final depth = 2.2 + 3.0 * mouthTrait;
+
+  switch (expression.id) {
+    case 'happy':
+      return _smile(x, y, half, depth * 0.9);
+    case 'grin':
+      return _smile(x, y, half * 1.15, depth * 1.25);
+    case 'sad':
+      return _smile(x, y, half * 0.9, -depth * 0.7);
+    case 'frown':
+      return _smile(x, y, half, -depth);
+    case 'surprised':
+      return ellipse(x, y + 0.5, half * 0.55, half * 0.62);
+    case 'scared':
+      return ellipse(x, y + 0.5, half * 0.62, half * 0.75);
+    case 'sleepy':
+      return ellipse(x, y + 0.6, half * 0.45, half * 0.5);
+    case 'love':
+      return _smile(x, y, half * 1.05, depth * 0.8);
+    case 'shy':
+      return polyline(
+        [(x: x - half * 0.6, y: y + 0.9), (x: x + half * 0.6, y: y - 0.2)],
+        width: 1.5,
+      );
+    case 'unsure':
+      return polyline(
+        [(x: x - half * 0.62, y: y + 0.5), (x: x + half * 0.62, y: y + 0.9)],
+        width: 1.6,
+      );
+    case 'sick':
+      return polyline(
+        [
+          (x: x - half, y: y),
+          (x: x - half * 0.5, y: y - 1.2),
+          (x: x, y: y + 0.6),
+          (x: x + half * 0.5, y: y - 1.2),
+          (x: x + half, y: y),
+        ],
+        width: 1.5,
+      );
+    case 'smug':
+      return polyline(
+        [(x: x - half * 0.7, y: y - 0.5), (x: x + half * 0.75, y: y + 1.2)],
+        width: 1.6,
+      );
+    case 'mad':
+      return polyline(
+        [(x: x - half * 0.7, y: y + 1.1), (x: x + half * 0.7, y: y - 0.9)],
+        width: 1.6,
+      );
+    case 'thinking':
+      return polyline(
+        [
+          (x: x - half * 0.55 + expression.eyeOffsetDx * 0.2, y: y - 0.6),
+          (x: x + half * 0.55 + expression.eyeOffsetDx * 0.2, y: y - 1.0),
+        ],
+        width: 1.5,
+      );
+    default: // idle — a gentle, small smile
+      return _smile(x, y, half * 0.85, depth * 0.5);
+  }
+}
+
+/// A filled lens-shaped mouth that opens downward for positive [depth] and
+/// upward (a frown) for negative depth.
+GeometryPath _smile(double x, double y, double half, double depth) {
+  return GeometryPath([
+    MoveTo(x - half, y),
+    CubicTo(
+      x - half * 0.35,
+      y + depth,
+      x + half * 0.35,
+      y + depth,
+      x + half,
+      y,
+    ),
+    const ClosePath(),
+  ]);
+}
+
+/// The accessory layout: pin/read presence per key, then build marks.
+List<Accessory> _accessories(
+  String shape,
+  String name,
+  HiblobOptions options,
+  Map<String, double> t,
+  List<EyeGroup> eyes,
+  int headColor,
+  int eyeColor,
+) {
+  final seed = options.normalize ? normalizeSeed(name) : name;
+  final present = <String, bool>{
+    for (final key in AccessoryKeys.all)
+      key: _pinOrHash(options, key, stream(seed, 'accessory.$key')),
+  };
+  final r = _bodyR(t);
+  final cx = 50.0, cy = 52.0;
+  final accent = eyeColor;
+  final fringe = relativeLuminance(headColor) > 0.30
+      ? oklchBlend(headColor, 0xFF20242E, 0.55)
+      : oklchBlend(headColor, 0xFFF2F2F2, 0.35);
+  final blush = oklchBlend(headColor, 0xFFF4A9BE, 0.65);
+  final result = <Accessory>[];
+
+  final glasses = present[AccessoryKeys.glasses]!;
+  if (glasses && eyes.length == 2) {
+    final halfWidth = _halfWidthAtFace(shape, t);
+    const ringWidth = 1.5;
+    const rr = 4.2;
+    final ey = (eyes[0].cy + eyes[1].cy) / 2;
+    result.add(Accessory(
+      GeometryPath([
+        for (final sideX in [eyes[0].cx, eyes[1].cx]) ...[
+          MoveTo(sideX, ey - rr),
+          CubicTo(sideX + rr * 0.38, ey - rr, sideX + rr * 0.38, ey + rr, sideX,
+              ey + rr),
+          CubicTo(sideX - rr * 0.38, ey + rr, sideX - rr * 0.38, ey - rr, sideX,
+              ey - rr),
+        ],
+      ], stroke: true, strokeWidth: ringWidth),
+      color: accent,
+    ));
+    result.add(Accessory(
+      polyline([
+        (x: eyes[0].cx + rr * 0.5, y: ey - 1.2),
+        (x: cx, y: ey - 1.8),
+        (x: eyes[1].cx - rr * 0.5, y: ey - 1.2),
+      ], width: 1.25),
+      color: accent,
+    ));
+    result.add(Accessory(
+      polyline([
+        (x: eyes[0].cx - rr, y: ey - 0.8),
+        (x: cx - halfWidth + 1.2, y: ey - 1.8),
+      ], width: 1.2),
+      color: accent,
+    ));
+    result.add(Accessory(
+      polyline([
+        (x: eyes[1].cx + rr, y: ey - 0.8),
+        (x: cx + halfWidth - 1.2, y: ey - 1.8),
+      ], width: 1.2),
+      color: accent,
+    ));
+  }
+
+  final fringeOn = present[AccessoryKeys.fringe]!;
+  if (fringeOn) {
+    final capR = r * 0.99;
+    result.add(Accessory(
+      halfDisc(cx, cy - r * 0.30, capR, down: false),
+      color: fringe,
+    ));
+  }
+
+  final blushOn = present[AccessoryKeys.blush]!;
+  if (blushOn && eyes.length == 2) {
+    final ey = eyes[0].cy;
+    final eyeSpread = (eyes[1].cx - eyes[0].cx).abs();
+    final dx = math.max(eyeSpread, 8.0) / 2 + 2.2;
+    for (final side in [-1.0, 1.0]) {
+      result.add(Accessory(
+        circle(cx + side * dx, ey + 3.2, math.max(eyeSpread * 0.30, 2.6)),
+        color: blush,
+        underEyes: true,
+      ));
+    }
+  }
+
+  final antennae = present[AccessoryKeys.antennae]!;
+  if (antennae) {
+    final tipY = cy - r - 4.5;
+    for (final side in [-1.0, 1.0]) {
+      final tipX = cx + side * 3.4 + (side > 0 ? 2.0 : -2.0);
+      result.add(Accessory(
+        polyline([(x: cx + side * 2.2, y: cy - r * 0.95), (x: tipX, y: tipY)],
+            width: 1.3),
+        color: accent,
+      ));
+      result.add(Accessory(circle(tipX, tipY, 1.6), color: accent));
+    }
+  }
+  return result;
+}
+
+bool _pinOrHash(HiblobOptions options, String key, double hash) {
+  final pin = options.accessories[key];
+  if (pin != null) return pin >= 0.5;
+  final prob = AccessoryKeys.defaultProbabilities[key] ?? 0.0;
+  return hash < prob;
 }
 
 (int, int) _palette(
@@ -407,7 +717,7 @@ double _faceDy(String shape, Map<String, double> t) {
 
   final tint = tintFor(options.expression);
   if (tint != 0x00000000 && options.expression.tintAlpha > 0) {
-    head = blendArgb(head, tint, options.expression.tintAlpha);
+    head = oklchBlend(head, tint, options.expression.tintAlpha);
   }
 
   final headPin = options.palette[PaletteKeys.head];

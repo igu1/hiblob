@@ -3,6 +3,12 @@
 library;
 
 import 'expressions.dart';
+import 'package:unorm_dart/unorm_dart.dart' as unorm;
+
+/// Normalizes a name the way the generator hashes it: Unicode NFC
+/// (canonical composition, so `'e'` + U+0301 and `'é'` are one name), trim,
+/// and lowercase.
+String normalizeSeed(String name) => unorm.nfc(name.trim().toLowerCase());
 
 /// The backdrop plates a hiblob can sit on.
 enum Backdrop {
@@ -31,6 +37,35 @@ abstract final class PaletteKeys {
   static const String eye = 'eye';
 }
 
+/// Keys [HiblobOptions.accessories] accepts, with the deterministic
+/// per-name probability each accessory defaults to when unpinned.
+abstract final class AccessoryKeys {
+  /// Round frames over the eyes.
+  static const String glasses = 'glasses';
+
+  /// A brow fringe (hair band) across the top of the figure.
+  static const String fringe = 'fringe';
+
+  /// Soft blush discs beside the eyes.
+  static const String blush = 'blush';
+
+  /// Two antennae rising from the top of the head.
+  static const String antennae = 'antennae';
+
+  /// Every accessory key.
+  static const List<String> all = [glasses, fringe, blush, antennae];
+
+  /// The per-name draw probability of each accessory when unpinned; the
+  /// layout reads `traits['shape']`-style streams for anything not in the
+  /// pin map.
+  static const Map<String, double> defaultProbabilities = {
+    glasses: 0.30,
+    fringe: 0.40,
+    blush: 0.30,
+    antennae: 0.12,
+  };
+}
+
 /// Immutable options for one hiblob.
 ///
 /// Everything is optional: with no options, the name alone decides the whole
@@ -51,12 +86,22 @@ class HiblobOptions {
   /// `'#1E293B'`.
   final Map<String, String> palette;
 
+  /// Accessory pins keyed by [AccessoryKeys]. A value of `1` forces the
+  /// accessory on, `0` forces it off, and keys left out stay name-driven —
+  /// each is drawn when the name's hash clears the accessory's default
+  /// probability in [AccessoryKeys.defaultProbabilities].
+  final Map<String, double> accessories;
+
+  /// Whether a mouth is drawn. Expressions still shape the eyes when off.
+  final bool mouth;
+
   /// Pins individual traits to the `[0, 1]` position the hash would otherwise
   /// have produced, keyed by trait name (for example `'shape'`,
   /// `'eye.ratio'`). Unknown keys are ignored.
   final Map<String, double> traits;
 
-  /// Whether the name is normalized (trimmed and lowercased) before hashing.
+  /// Whether the name is normalized before hashing: Unicode NFC, trim, and
+  /// lowercase.
   final bool normalize;
 
   /// Whether the contrast floor between body and eyes is enforced.
@@ -70,6 +115,8 @@ class HiblobOptions {
     this.hue,
     this.tone,
     this.palette = const {},
+    this.accessories = const {},
+    this.mouth = true,
     this.traits = const {},
     this.normalize = true,
     this.contrast = true,
@@ -83,7 +130,9 @@ class HiblobOptions {
       other.hue == hue &&
       other.tone == tone &&
       _mapsEqual(other.palette, palette) &&
+      _mapsEqual(other.accessories, accessories) &&
       _mapsEqual(other.traits, traits) &&
+      other.mouth == mouth &&
       other.normalize == normalize &&
       other.contrast == contrast &&
       other.expression == expression;
@@ -96,7 +145,9 @@ class HiblobOptions {
       normalize,
       contrast,
       expression,
+      mouth,
       Object.hashAllUnordered(palette.entries),
+      Object.hashAllUnordered(accessories.entries),
       Object.hashAllUnordered(traits.entries));
 
   static bool _mapsEqual(Map<String, Object> a, Map<String, Object> b) {

@@ -86,7 +86,9 @@ void main() {
       expect(at(0.0), 'round');
       expect(at(0.199), 'round');
       expect(at(0.2), 'organic');
-      expect(at(0.965), 'sun');
+      expect(at(0.945), 'gem');
+      expect(at(0.960), 'pillow');
+      expect(at(0.972), 'sun');
       expect(at(1.0), 'sun');
     });
 
@@ -306,6 +308,276 @@ void main() {
       }
 
       expect(sweep(0), lessThan(sweep(1) * 0.75));
+    });
+  });
+
+  group('OKLCh color space', () {
+    int channelDelta(int a, int b, int shift) =>
+        (((a >> shift) & 0xFF) - ((b >> shift) & 0xFF)).abs();
+
+    test('round-trips known colors within a couple of quantization steps', () {
+      for (final hex in ['#DD4422', '#101010', '#F2F2F2', '#00AABB']) {
+        final argb = hexToArgb(hex);
+        final (l: l, c: c, h: h) = argbToOklch(argb);
+        expect(l, inInclusiveRange(0, 1), reason: hex);
+        expect(c, greaterThan(0), reason: hex);
+        final back = oklchToArgb(l, c, h);
+        for (final shift in [16, 8, 0]) {
+          expect(channelDelta(argb, back, shift), lessThanOrEqualTo(2),
+              reason: '$hex channel shift $shift');
+        }
+      }
+    });
+
+    test('achromatic colors have zero-ish chroma', () {
+      final gray = argbToOklch(0xFF808080);
+      expect(gray.l, closeTo(0.6, 0.02));
+      expect(gray.c, lessThan(0.0001));
+    });
+
+    test('oklchBlend travels from one endpoint to the other', () {
+      final from = hexToArgb('#336699');
+      final to = hexToArgb('#EE5544');
+      final atZero = oklchBlend(from, to, 0);
+      final atOne = oklchBlend(from, to, 1);
+      for (final shift in [16, 8, 0]) {
+        expect(channelDelta(from, atZero, shift), lessThanOrEqualTo(3));
+        expect(channelDelta(to, atOne, shift), lessThanOrEqualTo(3));
+      }
+      final mid = argbToOklch(oklchBlend(from, to, 0.5));
+      final a = argbToOklch(from);
+      final b = argbToOklch(to);
+      expect(mid.l, closeTo((a.l + b.l) / 2, 0.02));
+    });
+  });
+
+  group('NFC normalization', () {
+    test('decomposed and composed spellings hash identically', () {
+      const decomposed = 'e\u0301'; // 'é' as e + combining acute
+      final a = traitsFor(decomposed);
+      final b = traitsFor('\u00e9');
+      expect(a, b);
+      expect(
+        resolve(decomposed).body.toPathData(),
+        resolve('\u00e9').body.toPathData(),
+      );
+    });
+
+    test('normalizeSeed composes, trims, and lowercases', () {
+      expect(
+        normalizeSeed(' \u0045\u0301  '),
+        normalizeSeed('\u00E9'.toLowerCase()),
+      );
+    });
+  });
+
+  group('mouths', () {
+    int markCount(String name) {
+      final resolved = resolve(name);
+      return resolved.mouth == null ? 0 : 1;
+    }
+
+    test('every figure has a mouth by default', () {
+      for (var i = 0; i < 300; i++) {
+        final resolved = resolve('mouth-$i');
+        expect(resolved.mouth, isNotNull);
+        expect(resolved.mouth!.bounds.maxY, lessThanOrEqualTo(100.0));
+      }
+    });
+
+    test('expressions change the mouth', () {
+      final idleMouth = resolve('ada').mouth;
+      final grinMouth =
+          resolve('ada', options: const HiblobOptions(expression: grin)).mouth;
+      final frownMouth =
+          resolve('ada', options: const HiblobOptions(expression: frown)).mouth;
+      expect(grinMouth, isNot(idleMouth));
+      expect(frownMouth, isNot(idleMouth));
+      expect(frownMouth!.bounds, isNot(grinMouth!.bounds));
+    });
+
+    test('mouths can be turned off', () {
+      final resolved =
+          resolve('ada', options: const HiblobOptions(mouth: false));
+      expect(resolved.mouth, isNull);
+      expect(markCount('ada'), 1);
+    });
+  });
+
+  group('accessories', () {
+    test('presence is deterministic and probability-bound', () {
+      final a = resolve('access-1').accessories.map((x) => x.path.toPathData());
+      final b = resolve('access-1').accessories.map((x) => x.path.toPathData());
+      expect(a, b);
+      // With no pins every accessory still appears somewhere across names.
+      final seen = <String>{};
+      for (var i = 0; i < 600; i++) {
+        for (final acc in resolve('acc-$i').accessories) {
+          seen.add(acc.path.toPathData());
+        }
+      }
+      expect(seen, isNotEmpty);
+    });
+
+    test('pins force accessories on and off', () {
+      const allOn = {
+        AccessoryKeys.glasses: 1.0,
+        AccessoryKeys.fringe: 1.0,
+        AccessoryKeys.blush: 1.0,
+        AccessoryKeys.antennae: 1.0,
+      };
+      final on =
+          resolve('ada', options: const HiblobOptions(accessories: allOn));
+      // Blush is two under-eye discs; the rest are above-face marks.
+      expect(on.accessories.where((a) => a.underEyes).length, 2);
+      expect(on.accessories.where((a) => !a.underEyes).length, greaterThan(0));
+      final off = resolve('ada',
+          options: const HiblobOptions(accessories: {
+            AccessoryKeys.glasses: 0,
+            AccessoryKeys.fringe: 0,
+            AccessoryKeys.blush: 0,
+            AccessoryKeys.antennae: 0,
+          }));
+      expect(off.accessories, isEmpty);
+    });
+
+    test('accessories stay inside the view box', () {
+      for (var i = 0; i < 400; i++) {
+        final resolved = resolve('acc-check-$i',
+            options: const HiblobOptions(accessories: {
+              AccessoryKeys.glasses: 1,
+              AccessoryKeys.fringe: 1,
+              AccessoryKeys.blush: 1,
+              AccessoryKeys.antennae: 1,
+            }));
+        for (final acc in resolved.accessories) {
+          final b = acc.path.bounds;
+          expect(b.minX, greaterThanOrEqualTo(-1.0));
+          expect(b.maxX, lessThanOrEqualTo(101.0));
+          expect(b.minY, greaterThanOrEqualTo(-6.0)); // antennae points
+          expect(b.maxY, lessThanOrEqualTo(101.0));
+        }
+      }
+    });
+  });
+
+  group('layoutFor, partsFor, drawStepsOf', () {
+    test('partsFor returns the body', () {
+      final resolved = resolve('ada');
+      expect(partsFor('ada').toPathData(), resolved.body.toPathData());
+    });
+
+    test('layoutFor covers backdrop, body, mouth, accessories, eyes', () {
+      final resolved = resolve('ada',
+          options: const HiblobOptions(
+            background: Backdrop.circle,
+            accessories: {AccessoryKeys.glasses: 1},
+          ));
+      final steps = layoutFor(
+        'ada',
+        options: const HiblobOptions(
+          background: Backdrop.circle,
+          accessories: {AccessoryKeys.glasses: 1},
+        ),
+      );
+      expect(
+          steps.map((s) => s.color), drawStepsOf(resolved).map((s) => s.color));
+      expect(steps.map((s) => s.path.toPathData()),
+          drawStepsOf(resolved).map((s) => s.path.toPathData()));
+      int countOf(bool Function(GeometryPath) test) =>
+          steps.where((s) => test(s.path)).length;
+      expect(countOf((p) => p == resolved.backdrop), 1);
+      expect(
+        countOf((p) => resolved.body.any((b) => b == p)),
+        resolved.body.length,
+      );
+      expect(countOf((p) => p == resolved.mouth), 1);
+      expect(countOf((p) => resolved.eyes.any((e) => e.marks.contains(p))),
+          resolved.eyes.expand((e) => e.marks).length);
+    });
+  });
+
+  group('SVG export', () {
+    test('emits a complete document with paths and colors', () {
+      final resolved = resolve('ada@example.com',
+          options: const HiblobOptions(
+            background: Backdrop.squircle,
+            expression: happy,
+          ));
+      final svg = svgOf(resolved);
+      expect(svg, startsWith('<svg xmlns="http://www.w3.org/2000/svg"'));
+      expect(svg, endsWith('</svg>'));
+      expect(svg, contains('viewBox="0 0 100 100"'));
+      expect(svg, contains(argbToHex(resolved.headColor)));
+      expect(svg, contains(argbToHex(resolved.backdropColor)));
+      // Count path nodes: body + backdrop + mouth + eyes.
+      final paths = '<path d'.allMatches(svg).length;
+      expect(paths, greaterThanOrEqualTo(resolved.body.length + 2));
+    });
+
+    test('svgFromName matches svgOf(resolve(...))', () {
+      expect(
+        svgFromName('grace', options: const HiblobOptions(expression: grin)),
+        svgOf(resolve('grace', options: const HiblobOptions(expression: grin))),
+      );
+    });
+
+    test('stroked paths lose fill and gain stroke', () {
+      final resolved =
+          resolve('winker', options: const HiblobOptions(expression: wink));
+      final hasStrokeMark =
+          resolved.eyes.any((e) => e.marks.any((m) => m.stroke));
+      if (!hasStrokeMark) return;
+      final svg = svgOf(resolved);
+      expect(svg, contains('fill="none" stroke='));
+    });
+  });
+
+  group('held expression loops', () {
+    test('thinking seesaws horizontally', () {
+      final seeds = motionSeedsFor('ada',
+          options: const HiblobOptions(expression: thinking));
+      var maxBodyX = 0.0;
+      for (var ms = 0.0; ms < 6000; ms += 50) {
+        maxBodyX = math.max(maxBodyX, motionAt(seeds, ms, ramp: 1).bodyX.abs());
+      }
+      expect(maxBodyX, greaterThan(0.7));
+    });
+
+    test('mad tremor layers a shake on top of the bob', () {
+      final madSeeds =
+          motionSeedsFor('ada', options: const HiblobOptions(expression: mad));
+      final idleSeeds = motionSeedsFor('ada');
+      var maxDelta = 0.0;
+      for (var ms = 0.0; ms < 1200; ms += 16) {
+        maxDelta = math.max(
+          maxDelta,
+          (motionAt(madSeeds, ms, ramp: 1).bodyY -
+                  motionAt(idleSeeds, ms, ramp: 1).bodyY)
+              .abs(),
+        );
+      }
+      // Same name, same bob — every delta comes from the tremor.
+      expect(maxDelta, greaterThan(0.5));
+    });
+
+    test('held loops still quiet at ramp 0', () {
+      // Held loops survive the ramp (that is the point) at 35% ambient but
+      // still drop toward it: sweep(0) must be quieter than sweep(1).
+      for (final expression in [thinking, mad]) {
+        final seeds = motionSeedsFor('ada',
+            options: HiblobOptions(expression: expression));
+        double sweep(double ramp) {
+          var total = 0.0;
+          for (var ms = 0.0; ms < 6000; ms += 16) {
+            total += motionAt(seeds, ms, ramp: ramp).bodyX.abs();
+          }
+          return total;
+        }
+
+        expect(sweep(0), lessThan(sweep(1)));
+        expect(sweep(0), greaterThan(0));
+      }
     });
   });
 

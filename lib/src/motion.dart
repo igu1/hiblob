@@ -7,6 +7,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'expressions.dart';
 import 'hash.dart';
 import 'options.dart';
 
@@ -21,6 +22,15 @@ class MotionSeeds {
   final double glancePeriod;
   final double glanceSeed;
 
+  /// Phase of the held `thinking` seesaw loop.
+  final double seesawPhase;
+
+  /// Random phase of the held `mad` tremor loop.
+  final double tremorPhase;
+
+  /// The expression the seeded figure carries; held loops read it.
+  final Expression expression;
+
   const MotionSeeds({
     required this.bobPhase,
     required this.bobPeriod,
@@ -30,11 +40,17 @@ class MotionSeeds {
     required this.blinkOffset,
     required this.glancePeriod,
     required this.glanceSeed,
+    this.seesawPhase = 0,
+    this.tremorPhase = 0,
+    this.expression = idle,
   });
 }
 
 /// One instant of motion, in view-box units.
 class MotionFrame {
+  /// Horizontal body offset (positive is right) — the `thinking` seesaw.
+  final double bodyX;
+
   /// Vertical body offset (positive is down).
   final double bodyY;
 
@@ -51,6 +67,7 @@ class MotionFrame {
   final double gazeY;
 
   const MotionFrame({
+    this.bodyX = 0,
     this.bodyY = 0,
     this.bodyScaleY = 1,
     this.blink = 0,
@@ -64,6 +81,7 @@ class MotionFrame {
   @override
   bool operator ==(Object other) =>
       other is MotionFrame &&
+      other.bodyX == bodyX &&
       other.bodyY == bodyY &&
       other.bodyScaleY == bodyScaleY &&
       other.blink == blink &&
@@ -71,18 +89,19 @@ class MotionFrame {
       other.gazeY == gazeY;
 
   @override
-  int get hashCode => Object.hash(bodyY, bodyScaleY, blink, gazeX, gazeY);
+  int get hashCode =>
+      Object.hash(bodyX, bodyY, bodyScaleY, blink, gazeX, gazeY);
 
   @override
   String toString() =>
-      'MotionFrame(bodyY: $bodyY, scaleY: $bodyScaleY, blink: $blink, '
-      'gaze: ($gazeX, $gazeY))';
+      'MotionFrame(bodyX: $bodyX, bodyY: $bodyY, scaleY: $bodyScaleY, '
+      'blink: $blink, gaze: ($gazeX, $gazeY))';
 }
 
 /// Reads the motion seeds for [name].
 MotionSeeds motionSeedsFor(String name,
     {HiblobOptions options = const HiblobOptions()}) {
-  final seed = options.normalize ? name.trim().toLowerCase() : name;
+  final seed = options.normalize ? normalizeSeed(name) : name;
   return MotionSeeds(
     bobPhase: stream(seed, 'motion.bob.phase') * 2 * math.pi,
     bobPeriod: 2.4 + stream(seed, 'motion.bob.period') * 1.2,
@@ -92,6 +111,9 @@ MotionSeeds motionSeedsFor(String name,
     blinkOffset: stream(seed, 'motion.blink.offset') * 0.35,
     glancePeriod: 1.8 + stream(seed, 'motion.glance.period') * 2.0,
     glanceSeed: stream(seed, 'motion.glance.seed'),
+    seesawPhase: stream(seed, 'motion.seesaw.phase') * 2 * math.pi,
+    tremorPhase: stream(seed, 'motion.tremor.phase') * 2 * math.pi,
+    expression: options.expression,
   );
 }
 
@@ -108,6 +130,10 @@ double _easeOutCubic(double t) => 1 - math.pow(1 - t, 3).toDouble();
 /// full liveliness (1) — the hover mode ramps it with the pointer. The frame
 /// at elapsed 0 is always blink-free, so a paused hiblob never shows half a
 /// blink.
+///
+/// Two expressions carry *held* loops that survive the ramp: `thinking`
+/// slowly seesaws its body from side to side, and `mad` adds a fast
+/// high-frequency tremor. Both scale with [ramp] so they still quiet down.
 MotionFrame motionAt(MotionSeeds seeds, double elapsedMs, {double ramp = 0}) {
   final t = elapsedMs / 1000;
   final ambient = 0.35 + 0.65 * ramp.clamp(0.0, 1.0);
@@ -116,6 +142,24 @@ MotionFrame motionAt(MotionSeeds seeds, double elapsedMs, {double ramp = 0}) {
       1.5 *
       ambient;
   final bodyY = bob - 2.0 * ramp;
+  var bodyX = 0.0;
+  var tremor = 0.0;
+  switch (seeds.expression.id) {
+    case 'thinking':
+      // Seesaw: one slow traverse roughly every 6 seconds.
+      bodyX =
+          math.sin(2 * math.pi * t / 6.0 + seeds.seesawPhase) * 1.1 * ambient;
+      break;
+    case 'mad':
+      // Tremor: a fast, tiny shake layered over the bob.
+      tremor = (math.sin(2 * math.pi * t / 0.32 + seeds.tremorPhase) * 0.8 +
+              math.sin(2 * math.pi * t / 0.21 + seeds.tremorPhase * 1.7) *
+                  0.4) *
+          ambient;
+      bodyX =
+          math.sin(2 * math.pi * t / 0.53 + seeds.tremorPhase) * 0.35 * ambient;
+      break;
+  }
   final bodyScaleY = 1 +
       math.sin(2 * math.pi * t / seeds.breathePeriod + seeds.breathePhase) *
           0.012 *
@@ -145,7 +189,8 @@ MotionFrame motionAt(MotionSeeds seeds, double elapsedMs, {double ramp = 0}) {
   }
 
   return MotionFrame(
-    bodyY: bodyY,
+    bodyX: bodyX,
+    bodyY: bodyY + tremor,
     bodyScaleY: bodyScaleY,
     blink: blink,
     gazeX: glance('x'),

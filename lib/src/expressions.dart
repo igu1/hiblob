@@ -98,6 +98,12 @@ const Expression thinking = Expression(
   eyeOffsetDy: -1.6,
 );
 
+/// A wide open smile.
+const Expression grin = Expression('grin');
+
+/// A downturned mouth that droops at the corners.
+const Expression frown = Expression('frown');
+
 /// Every built-in expression, in roster order.
 const List<Expression> expressions = [
   idle,
@@ -114,6 +120,8 @@ const List<Expression> expressions = [
   shy,
   sick,
   thinking,
+  grin,
+  frown,
 ];
 
 /// The tint color used by expressions that carry one, as ARGB.

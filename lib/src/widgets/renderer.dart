@@ -69,16 +69,30 @@ class HiblobRenderer {
       canvas.drawPath(uiPathFrom(backdrop), _fillPaint(resolved.backdropColor));
     }
 
-    // Body: bob is a plain translation; breathe scales vertically around the
-    // body center so the figure "inhales" rather than sliding.
+    // Body, mouth, and accessories ride the bob/breathe transform together —
+    // they are all attached to the body, so they move as one. The seesaw and
+    // tremor loops arrive as [MotionFrame.bodyX].
     canvas.save();
-    canvas.translate(0, frame.bodyY);
+    canvas.translate(frame.bodyX, frame.bodyY);
     canvas.translate(50, 52);
     canvas.scale(1, frame.bodyScaleY);
     canvas.translate(-50, -52);
     final headPaint = _fillPaint(resolved.headColor);
     for (final part in resolved.body) {
       canvas.drawPath(uiPathFrom(part), headPaint);
+    }
+    final mouth = resolved.mouth;
+    if (mouth != null) {
+      _drawMarks(canvas, [mouth], resolved.eyeColor);
+    }
+    // Under-eye accessories (blush) paint below the eyes.
+    for (final accessory in resolved.accessories.where((a) => a.underEyes)) {
+      final path = uiPathFrom(accessory.path);
+      if (accessory.path.stroke) {
+        canvas.drawPath(path, _strokePaint(accessory));
+      } else {
+        canvas.drawPath(path, _fillPaint(accessory.color));
+      }
     }
     canvas.restore();
 
@@ -95,22 +109,45 @@ class HiblobRenderer {
       for (final mark in eye.marks) {
         final path = uiPathFrom(mark);
         if (mark.stroke) {
-          canvas.drawPath(
-            path,
-            ui.Paint()
-              ..color = ui.Color(resolved.eyeColor)
-              ..style = ui.PaintingStyle.stroke
-              ..strokeWidth = mark.strokeWidth
-              ..strokeCap = ui.StrokeCap.round
-              ..strokeJoin = ui.StrokeJoin.round,
-          );
+          canvas.drawPath(path, _strokePaintMark(mark, resolved.eyeColor));
         } else {
           canvas.drawPath(path, _fillPaint(resolved.eyeColor));
         }
       }
       canvas.restore();
     }
+
+    // Above-face accessories (glasses, fringe, antennae) paint over the eyes.
+    for (final accessory in resolved.accessories.where((a) => !a.underEyes)) {
+      final path = uiPathFrom(accessory.path);
+      if (accessory.path.stroke) {
+        canvas.drawPath(path, _strokePaint(accessory));
+      } else {
+        canvas.drawPath(path, _fillPaint(accessory.color));
+      }
+    }
   }
+
+  void _drawMarks(ui.Canvas canvas, List<GeometryPath> marks, int color) {
+    for (final mark in marks) {
+      final path = uiPathFrom(mark);
+      if (mark.stroke) {
+        canvas.drawPath(path, _strokePaintMark(mark, color));
+      } else {
+        canvas.drawPath(path, _fillPaint(color));
+      }
+    }
+  }
+
+  ui.Paint _strokePaint(Accessory accessory) =>
+      _strokePaintMark(accessory.path, accessory.color);
+
+  ui.Paint _strokePaintMark(GeometryPath path, int color) => ui.Paint()
+    ..color = ui.Color(color)
+    ..style = ui.PaintingStyle.stroke
+    ..strokeWidth = path.strokeWidth
+    ..strokeCap = ui.StrokeCap.round
+    ..strokeJoin = ui.StrokeJoin.round;
 
   ui.Paint _fillPaint(int argb) => ui.Paint()..color = ui.Color(argb);
 }

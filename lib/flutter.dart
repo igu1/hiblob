@@ -19,7 +19,10 @@ library;
 
 export 'package:hiblob/hiblob.dart'
     show
+        Accessory,
+        AccessoryKeys,
         Backdrop,
+        DrawStep,
         Expression,
         EyeGroup,
         GeometryPath,
@@ -27,13 +30,18 @@ export 'package:hiblob/hiblob.dart'
         MotionFrame,
         MotionSeeds,
         ResolvedHiblob,
+        drawStepsOf,
         expressions,
+        frown,
+        grin,
         happy,
         idle,
+        layoutFor,
         love,
         mad,
         motionAt,
         motionSeedsFor,
+        partsFor,
         PaletteKeys,
         resolve,
         scared,
@@ -47,6 +55,8 @@ export 'package:hiblob/hiblob.dart'
         traitsFor,
         unsure,
         wink;
+export 'src/svg.dart' show svgFromName, svgOf;
+export 'src/traits.dart' show shapeBands, toneBands, traitKeys;
 export 'src/widgets/painter.dart' show AnimatedHiblobPainter, HiblobPainter;
 export 'src/widgets/renderer.dart' show HiblobRenderer, uiPathFrom;
 export 'src/widgets/widget.dart' show AnimatedHiblob, Hiblob, HiblobAnimation;

@@ -20,11 +20,22 @@
 library;
 
 export 'src/color.dart'
-    show argbToHex, blendArgb, hexToArgb, hslToArgb, relativeLuminance;
+    show
+        argbToHex,
+        argbToOklch,
+        blendArgb,
+        hexToArgb,
+        hslToArgb,
+        oklchBlend,
+        oklchToArgb,
+        Oklch,
+        relativeLuminance;
 export 'src/expressions.dart'
     show
         Expression,
         expressions,
+        frown,
+        grin,
         happy,
         idle,
         love,
@@ -63,8 +74,20 @@ export 'src/geometry.dart'
         smoothClosed,
         star,
         superellipse;
-export 'src/layout.dart' show EyeGroup, ResolvedHiblob, resolve, viewBoxSize;
+export 'src/layout.dart'
+    show
+        Accessory,
+        DrawStep,
+        EyeGroup,
+        ResolvedHiblob,
+        drawStepsOf,
+        layoutFor,
+        partsFor,
+        resolve,
+        viewBoxSize;
 export 'src/motion.dart'
     show MotionFrame, MotionSeeds, motionAt, motionSeedsFor;
-export 'src/options.dart' show Backdrop, HiblobOptions, PaletteKeys;
+export 'src/options.dart'
+    show AccessoryKeys, Backdrop, HiblobOptions, normalizeSeed, PaletteKeys;
 export 'src/traits.dart' show shapeBands, toneBands, traitKeys, traitsFor;
+export 'src/svg.dart' show svgFromName, svgOf;

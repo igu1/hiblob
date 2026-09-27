@@ -19,6 +19,7 @@ const List<String> traitKeys = [
   'eye.spacing',
   'eye.offset',
   'face.offset',
+  'mouth',
   'detail.a',
   'detail.b',
   'detail.c',
@@ -28,11 +29,12 @@ const List<String> traitKeys = [
 
 /// Reads the trait table for [name], with [options] pins applied.
 ///
-/// When [HiblobOptions.normalize] is on, the name is trimmed and lowercased
-/// before hashing, so `'  ADA '` and `'ada'` hash identically.
+/// When [HiblobOptions.normalize] is on, the name is composed to Unicode NFC,
+/// trimmed, and lowercased before hashing, so `'  ADA '`, `'  Ada '`, and
+/// decomposed `'e'` + U+0301 all hash identically to `'ada'`.
 Map<String, double> traitsFor(String name,
     {HiblobOptions options = const HiblobOptions()}) {
-  final seed = options.normalize ? name.trim().toLowerCase() : name;
+  final seed = options.normalize ? normalizeSeed(name) : name;
   final traits = {for (final k in traitKeys) k: stream(seed, k)};
   for (final e in options.traits.entries) {
     if (traits.containsKey(e.key)) {
@@ -70,9 +72,11 @@ const Map<String, (double, double)> shapeBands = {
   'capsule': (0.650, 0.740),
   'hexagon': (0.740, 0.800),
   'triangle': (0.800, 0.860),
-  'droplet': (0.860, 0.920),
-  'cloud': (0.920, 0.965),
-  'sun': (0.965, 1.010),
+  'droplet': (0.860, 0.905),
+  'cloud': (0.905, 0.945),
+  'gem': (0.945, 0.960),
+  'pillow': (0.960, 0.972),
+  'sun': (0.972, 1.010),
 };
 
 /// The tone bands, pale to ink, partitioned like the silhouette bands.
