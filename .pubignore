@@ -16,3 +16,8 @@ pubspec.lock
 .metadata
 .git/
 .gitignore
+
+# The sample images are hosted in the git repository (the README hotlinks
+# them from raw.githubusercontent.com); they don't need to ship in the
+# published archive.
+assets/

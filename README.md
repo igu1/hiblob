@@ -7,6 +7,10 @@ it from that somebody's `name` — a username, a display name, an email, a
 handle, an id. Any string works, and the same string always renders the same
 hiblob, on every platform, forever.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/igu1/hiblob/main/assets/hero.png" alt="A hiblob avatar for the name ada@example.com — an organic pale blob wearing glasses on a squircle" width="280" />
+</p>
+
 - **No network, no assets.** The figure is computed from the name and painted
   directly with Flutter `Canvas` primitives. No web view, no wrapped SVG, no
   image files to bundle.
@@ -20,6 +24,27 @@ hiblob, on every platform, forever.
   name-driven, all pinnable.
 - **Exits Flutter.** The resolved draw list can be emitted as a standalone
   SVG document for servers, mail, and design tools.
+
+## Samples
+
+Every name draws a different creature — 48 usernames, all freshly generated:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/igu1/hiblob/main/assets/mosaic.png" alt="A wall of 48 hiblob avatars, each a distinct silhouette, palette, face, and accessory mix" width="720" />
+</p>
+
+All 16 expressions on one name:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/igu1/hiblob/main/assets/expressions.png" alt="The 16 hiblob expressions" width="720" />
+</p>
+
+And the 12-silhouette roster with every accessory pinned on, showing the
+fitted brow cap hugging each shape:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/igu1/hiblob/main/assets/silhouettes.png" alt="The 12 hiblob silhouettes with the fitted brow cap, glasses, blush and antennae" width="480" />
+</p>
 
 ## Install
 
@@ -251,3 +276,7 @@ flutter test
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The pure core of this package ships on npm too — [`hiblob`](https://www.npmjs.com/package/hiblob)
+([github.com/igu1/hiblob-npm](https://github.com/igu1/hiblob-npm)) — a
+byte-identical TypeScript port, golden-tested against this implementation.

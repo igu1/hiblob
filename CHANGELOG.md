@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+
+- README visual refresh: hero and generated sample galleries embedded in the
+  readme, plus samples in `assets/`.
+- Expanded link to the official JavaScript port — `hiblob` on npm
+  ([github.com/igu1/hiblob-npm](https://github.com/igu1/hiblob-npm)) — with
+  byte-identical output, golden-tested against this implementation.
+- New untracked spec: `NPM_PORT_SPEC.md`, the complete handoff document the
+  npm port was built from. No visual or API changes.
+
 ## 1.0.0
 
 First stable release. Deterministic geometric blob avatars from any string,
