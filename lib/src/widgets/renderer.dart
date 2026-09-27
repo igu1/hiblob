@@ -87,14 +87,8 @@ class HiblobRenderer {
     }
     // Under-eye accessories (blush) paint below the eyes.
     for (final accessory in resolved.accessories.where((a) => a.underEyes)) {
-      final path = uiPathFrom(accessory.path);
-      if (accessory.path.stroke) {
-        canvas.drawPath(path, _strokePaint(accessory));
-      } else {
-        canvas.drawPath(path, _fillPaint(accessory.color));
-      }
+      _drawAccessory(canvas, accessory);
     }
-    canvas.restore();
 
     // Eyes: glances translate; blinks scale each open eye around its own
     // center. Closed-line eyes are already shut and never blink.
@@ -119,13 +113,17 @@ class HiblobRenderer {
 
     // Above-face accessories (glasses, fringe, antennae) paint over the eyes.
     for (final accessory in resolved.accessories.where((a) => !a.underEyes)) {
-      final path = uiPathFrom(accessory.path);
-      if (accessory.path.stroke) {
-        canvas.drawPath(path, _strokePaint(accessory));
-      } else {
-        canvas.drawPath(path, _fillPaint(accessory.color));
-      }
+      _drawAccessory(canvas, accessory);
     }
+    canvas.restore();
+  }
+
+  void _drawAccessory(ui.Canvas canvas, Accessory accessory) {
+    canvas.save();
+    final clip = accessory.clip;
+    if (clip != null) canvas.clipPath(uiPathFrom(clip));
+    _drawMarks(canvas, [accessory.path], accessory.color);
+    canvas.restore();
   }
 
   void _drawMarks(ui.Canvas canvas, List<GeometryPath> marks, int color) {
@@ -138,9 +136,6 @@ class HiblobRenderer {
       }
     }
   }
-
-  ui.Paint _strokePaint(Accessory accessory) =>
-      _strokePaintMark(accessory.path, accessory.color);
 
   ui.Paint _strokePaintMark(GeometryPath path, int color) => ui.Paint()
     ..color = ui.Color(color)

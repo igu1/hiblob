@@ -485,7 +485,7 @@ void main() {
       expect(steps.map((s) => s.path.toPathData()),
           drawStepsOf(resolved).map((s) => s.path.toPathData()));
       int countOf(bool Function(GeometryPath) test) =>
-          steps.where((s) => test(s.path)).length;
+          steps.where((s) => s.clip == null && test(s.path)).length;
       expect(countOf((p) => p == resolved.backdrop), 1);
       expect(
         countOf((p) => resolved.body.any((b) => b == p)),

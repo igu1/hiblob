@@ -19,7 +19,15 @@ String svgOf(ResolvedHiblob resolved) {
   final buffer = StringBuffer()
     ..write('<svg xmlns="http://www.w3.org/2000/svg" '
         'viewBox="0 0 100 100" width="100" height="100">');
+  var clipIndex = 0;
   for (final step in drawStepsOf(resolved)) {
+    final clip = step.clip;
+    if (clip != null) {
+      final id = 'cap-clip-${clipIndex++}';
+      buffer.write('<defs><clipPath id="$id" clipPathUnits="userSpaceOnUse">'
+          '<path d="${clip.toPathData()}"/></clipPath></defs>'
+          '<g clip-path="url(#$id)">');
+    }
     final color = argbToHex(step.color);
     buffer.write('<path d="${step.path.toPathData()}"');
     if (step.path.stroke) {
@@ -30,6 +38,7 @@ String svgOf(ResolvedHiblob resolved) {
       buffer.write(' fill="$color"');
     }
     buffer.write('/>');
+    if (clip != null) buffer.write('</g>');
   }
   buffer.write('</svg>');
   return buffer.toString();

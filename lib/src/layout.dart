@@ -37,6 +37,9 @@ class EyeGroup {
 class Accessory {
   final GeometryPath path;
 
+  /// Optional clipping outline for fitted cap details.
+  final GeometryPath? clip;
+
   /// ARGB color.
   final int color;
 
@@ -44,7 +47,8 @@ class Accessory {
   /// discs) or above them (for example glasses frames).
   final bool underEyes;
 
-  const Accessory(this.path, {required this.color, this.underEyes = false});
+  const Accessory(this.path,
+      {required this.color, this.underEyes = false, this.clip});
 }
 
 /// A fully resolved, ready-to-draw hiblob.
@@ -106,10 +110,13 @@ class ResolvedHiblob {
 class DrawStep {
   final GeometryPath path;
 
+  /// Optional clipping outline applied before drawing this step.
+  final GeometryPath? clip;
+
   /// ARGB color. For stroked paths this is the stroke color.
   final int color;
 
-  const DrawStep(this.path, this.color);
+  const DrawStep(this.path, this.color, {this.clip});
 }
 
 /// The completed draw list for [name]: every path in paint order (backdrop,
@@ -143,12 +150,15 @@ List<DrawStep> drawStepsOf(ResolvedHiblob resolved) {
   if (mouth != null) {
     steps.add(DrawStep(mouth, resolved.eyeColor));
   }
-  for (final accessory in resolved.accessories) {
-    steps.add(DrawStep(accessory.path, accessory.color));
+  for (final accessory in resolved.accessories.where((a) => a.underEyes)) {
+    steps.add(DrawStep(accessory.path, accessory.color, clip: accessory.clip));
   }
   for (final eye in resolved.eyes) {
     steps.addAll(
         [for (final mark in eye.marks) DrawStep(mark, resolved.eyeColor)]);
+  }
+  for (final accessory in resolved.accessories.where((a) => !a.underEyes)) {
+    steps.add(DrawStep(accessory.path, accessory.color, clip: accessory.clip));
   }
   return steps;
 }
@@ -601,53 +611,74 @@ List<Accessory> _accessories(
 
   final glasses = present[AccessoryKeys.glasses]!;
   if (glasses && eyes.length == 2) {
-    final halfWidth = _halfWidthAtFace(shape, t);
-    const ringWidth = 1.5;
-    const rr = 4.2;
+    final lensWidth = math.min(10.8, eyes[1].cx - eyes[0].cx - 2.4);
+    final rr = lensWidth / 2;
     final ey = (eyes[0].cy + eyes[1].cy) / 2;
+    final lensHeight = math.max(
+        11.0, 2 * (3.1 - t['eye.ratio']!) * (1 + 2.4 * t['eye.ratio']!) + 3);
+    // Round, slightly taller-than-wide lenses with a full-radius top.
+    for (final eye in eyes) {
+      final lens =
+          roundedRect(eye.cx, ey, lensWidth, lensHeight, lensHeight / 2 + 0.6);
+      result.add(Accessory(
+        GeometryPath(lens.commands, stroke: true, strokeWidth: 1.8),
+        color: accent,
+      ));
+    }
+    // Curved bridge.
     result.add(Accessory(
       GeometryPath([
-        for (final sideX in [eyes[0].cx, eyes[1].cx]) ...[
-          MoveTo(sideX, ey - rr),
-          CubicTo(sideX + rr * 0.38, ey - rr, sideX + rr * 0.38, ey + rr, sideX,
-              ey + rr),
-          CubicTo(sideX - rr * 0.38, ey + rr, sideX - rr * 0.38, ey - rr, sideX,
-              ey - rr),
-        ],
-      ], stroke: true, strokeWidth: ringWidth),
+        MoveTo(eyes[0].cx + rr, ey - 1.4),
+        QuadraticTo(
+            (eyes[0].cx + eyes[1].cx) / 2, ey - 4.4, eyes[1].cx - rr, ey - 1.4),
+      ], stroke: true, strokeWidth: 1.8),
       color: accent,
     ));
-    result.add(Accessory(
-      polyline([
-        (x: eyes[0].cx + rr * 0.5, y: ey - 1.2),
-        (x: cx, y: ey - 1.8),
-        (x: eyes[1].cx - rr * 0.5, y: ey - 1.2),
-      ], width: 1.25),
-      color: accent,
-    ));
-    result.add(Accessory(
-      polyline([
-        (x: eyes[0].cx - rr, y: ey - 0.8),
-        (x: cx - halfWidth + 1.2, y: ey - 1.8),
-      ], width: 1.2),
-      color: accent,
-    ));
-    result.add(Accessory(
-      polyline([
-        (x: eyes[1].cx + rr, y: ey - 0.8),
-        (x: cx + halfWidth - 1.2, y: ey - 1.8),
-      ], width: 1.2),
-      color: accent,
-    ));
+    // Temple arms run from the lens edge to the silhouette, clipped to the
+    // body so they always finish on the outline whatever the shape.
+    final bodies = _body(shape, t);
+    for (final side in [-1.0, 1.0]) {
+      final eye = side < 0 ? eyes[0] : eyes[1];
+      final armX = eye.cx + side * (rr + 2.0);
+      result.add(Accessory(
+        GeometryPath([
+          MoveTo(eye.cx + side * (rr - 0.4), ey - 1.0),
+          QuadraticTo(armX, ey - 2.6, eye.cx + side * (rr + 5.0), ey - 2.6),
+        ], stroke: true, strokeWidth: 1.5),
+        color: accent,
+        clip: bodies.first,
+      ));
+    }
   }
 
   final fringeOn = present[AccessoryKeys.fringe]!;
   if (fringeOn) {
-    final capR = r * 0.99;
-    result.add(Accessory(
-      halfDisc(cx, cy - r * 0.30, capR, down: false),
-      color: fringe,
-    ));
+    // Cover the upper portion of every body volume, including nubs and
+    // cloud puffs. A generic circular dome cannot fit these silhouettes.
+    final edgeY = cy - r * 0.38;
+    final crownClip = roundedRect(50, edgeY / 2, 100, edgeY, 0);
+    final bandClip = roundedRect(50, edgeY - 1.8, 100, 3.6, 0);
+    final bodies = _body(shape, t);
+    for (final part in bodies) {
+      result.add(Accessory(part, color: fringe, clip: crownClip));
+    }
+    for (final part in bodies) {
+      result.add(Accessory(part,
+          color: oklchBlend(fringe, accent, 0.3), clip: bandClip));
+    }
+    // Subtle panel stitching stays inside the silhouette.
+    for (final part in bodies) {
+      for (final side in [-1.0, 1.0]) {
+        result.add(Accessory(
+            GeometryPath([
+              MoveTo(cx + side * 3, cy - r * 0.78),
+              QuadraticTo(
+                  cx + side * 6, cy - r * 0.65, cx + side * 7, edgeY - 4.5),
+            ], stroke: true, strokeWidth: 0.7),
+            color: oklchBlend(fringe, headColor, 0.28),
+            clip: part));
+      }
+    }
   }
 
   final blushOn = present[AccessoryKeys.blush]!;

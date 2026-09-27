@@ -1,7 +1,29 @@
 # Changelog
 
-## 0.2.0
+## 1.0.0
 
+First stable release. Deterministic geometric blob avatars from any string,
+with a pure Dart core and static or animated Flutter widgets.
+
+- Pure Dart core: NFC normalization, hashing, traits, HSL + OKLCh palette,
+  geometry, expressions, and elapsed-time motion — no Flutter or `dart:ui`.
+- Static and animated Flutter widgets with hover/always motion, expression
+  crossfades, held `thinking` seesaw and `mad` tremor loops, reduced-motion
+  support, and tickers that only run while motion should advance.
+- Twelve silhouettes, sixteen expressions, four backdrops, and a fitted
+  accessory layer (glasses with curved bridges, an outline-following brow cap
+  with cuff and seams, blush, antennae) — all name-driven and pinnable.
+- Mouths per expression, active or off via `HiblobOptions(mouth: false)`.
+- SVG export (`svgOf`, `svgFromName`) and the `layoutFor`/`partsFor`/
+  `drawStepsOf` draw list for use outside Flutter.
+
+- Accessory redesign: the brow cap is now fitted to the actual upper outline
+  of every silhouette (cloud puffs, nubs, and star points included) with a
+  contrasting cuff and stitched panel seams, instead of a circular dome that
+  overflowed wide or spiky shapes. Caps and seams are clipped to the body in
+  both the Canvas renderer and SVG export.
+- Glasses redesigned: wider rounded lenses, a curved bridge, and temple arms
+  that end on the body outline instead of stubs floating mid-air.
 - Mouths: every expression now draws a mouth under the eyes; turn it off with
   `HiblobOptions(mouth: false)`. Two new expressions, `grin` and `frown`.
 - Accessories: a deterministic accessory layer (glasses, brow fringe, blush,

@@ -15,6 +15,11 @@ hiblob, on every platform, forever.
   Flutter nor `dart:ui`, so you can render or compute anywhere Dart runs.
 - **Static or animated.** Seeded breathe, bob, blink, and glance motion is
   opt-in, and expression changes morph between poses.
+- **Expressive by default.** Mouths, deterministic accessories (glasses, a
+  brow cap, blush, antennae), and held expression loops come built in — all
+  name-driven, all pinnable.
+- **Exits Flutter.** The resolved draw list can be emitted as a standalone
+  SVG document for servers, mail, and design tools.
 
 ## Install
 
@@ -107,14 +112,40 @@ HiblobOptions(
 | `hue` | degrees | Pins color while the name continues to drive other traits. |
 | `tone` | `0 <= value < 1` | Selects an authored lightness/chroma band. |
 | `palette` | `Map<String, String>` | Overrides selected bg, head, or eye colors. |
+| `mouth` | `bool` | Draws the expression's mouth; set `false` for eyes only. |
+| `accessories` | `Map<String, double>` | Pins accessories by `AccessoryKeys`; omitted keys stay name-driven. |
 | `traits` | `Map<String, Object>` | Pins trait positions; omitted traits remain name-driven. |
 | `normalize` | `bool` | Applies NFC, trim, and lowercase when true. |
 | `contrast` | `bool` | Enforces the contrast floors when true. |
-| `expression` | `Expression` | Applies one of the fourteen poses and optional tint. |
+| `expression` | `Expression` | Applies one of the sixteen poses and optional tint. |
 
 All expression values are exported from either library: `idle`, `happy`,
 `sad`, `mad`, `surprised`, `wink`, `sleepy`, `smug`, `unsure`, `scared`,
-`love`, `shy`, `sick`, and `thinking`.
+`love`, `shy`, `sick`, `thinking`, `grin`, and `frown`.
+
+### Accessories
+
+Four accessories are drawn deterministically from the name when they are not
+pinned: round glasses, a color-matched brow cap with a contrasting cuff,
+under-eye blush discs, and antennae. Force any of them on or off:
+
+```dart
+// Glasses always on; blush and antennae always off; the cap stays
+// name-driven.
+Hiblob(
+  name: user.email,
+  options: const HiblobOptions(accessories: {
+    AccessoryKeys.glasses: 1,
+    AccessoryKeys.blush: 0,
+    AccessoryKeys.antennae: 0,
+  }),
+);
+```
+
+The cap is fitted, not stamped: it covers the actual upper outline of the
+silhouette — including cloud puffs, nubs, and star points — and finishes
+with a cuff and stitched panel seams. Glasses ride the eye line with a
+curved bridge and temple arms that end on the body outline.
 
 ### Configuring
 
@@ -142,42 +173,39 @@ the name stops mattering, which is how you build one fixed hiblob.
 import 'package:hiblob/hiblob.dart';
 
 final traits = traitsFor('ada@example.com');
-final layout = layoutFor('ada@example.com');
-final colors = ramp(210);
-final frame = motionAt(
-  motionSeedsFor('ada@example.com'),
-  1200,
-  1,
-);
+final layout = layoutFor('ada@example.com'); // the paint-order draw list
+final frame = motionAt(motionSeedsFor('ada@example.com'), 1200, ramp: 1);
+final svg = svgFromName('ada@example.com');
 ```
 
 - `traitsFor` exposes the deterministic trait reader.
-- `layoutFor`, `partsFor`, and `resolve` expose resolved output.
-- `ramp` and `palette` expose the authored OKLCh palette pipeline.
-- `superellipse`, `blobPath`, and `polygon` expose structured path primitives.
+- `resolve` returns a fully resolved figure; `layoutFor` flattens it into
+  paint-order `DrawStep`s, `partsFor` returns the body paths, and
+  `drawStepsOf` applies to an already resolved figure.
+- `svgOf` and `svgFromName` emit standalone SVG documents.
+- The palette pipeline is authored in HSL and blended in OKLCh;
+  `argbToOklch`, `oklchToArgb`, and `oklchBlend` expose the perceptual
+  color math, and `hexToArgb`/`argbToHex` round-trip pins.
+- `superellipse`, `roundedPolygon`, `radialBlob`, and the rest of the
+  geometry builders expose structured path primitives.
 - `motionSeedsFor` and `motionAt` expose deterministic motion without a
   Flutter controller.
 
 ## The visual contract
 
-A hiblob's seed-to-look mapping is frozen: ten silhouettes, the OKLCh tone
-set, fourteen expressions, and every numeric range the layout reads a trait
-into move together, and adding to any of them is a breaking change by
-definition. The same name always renders the same figure.
+A hiblob's seed-to-look mapping is frozen: twelve silhouettes, the tone set,
+sixteen expressions, the accessory roster, and every numeric range the layout
+reads a trait into move together, and changing any of them is a breaking
+change by definition. The same name always renders the same figure.
 
-`test/fixtures/reference-vectors.json` is a checked-in, self-describing
-fixture with 1,570 layout cases, 42 expression cases, every silhouette band,
-normalization and non-ASCII inputs, palette/tone edges, and trait overrides.
-The Dart tests read it; they never update it from implementation output, and
-`test/` is excluded from the published package archive.
+`test/` is a repository artifact and is excluded from the published archive
+via `.pubignore`. Determinism is pinned by the test suite: band edges,
+normalization cases (composed, decomposed, trimmed, and cased input),
+palette/tone edges, trait overrides, per-shape accessibility coverage for the
+fitted cap, and SVG document structure.
 
-Dart VM trigonometric functions call the host C math library. IEEE 754 does
-not require one bit-exact sin/cos implementation, so trig-derived layout
-floats use the fixture's tight 1e-9 relative tolerance. Rounded path data,
-hash values, traits, palette hex, and expression channels remain exact.
-
-NFC is provided by `unorm_dart`. The fixture covers the normalization cases
-that affect the paste-a-name contract.
+NFC is provided by `unorm_dart`, so composed and decomposed spellings of a
+name hash identically.
 
 ## Supported platforms
 
@@ -195,7 +223,8 @@ The supported SDK floor is Dart 3.6 / Flutter 3.27.
 ## Example
 
 `example/` is an interactive studio for changing the name, shape, expression,
-hue, backdrop, and motion mode. It also demonstrates held expression loops, a
+hue, backdrop, mouth, accessories, and motion mode — with a **Copy SVG**
+export. It also demonstrates held expression loops (`thinking`, `mad`), a
 hover-animated gallery, and reduced continuous list work.
 
 ```sh
@@ -210,8 +239,7 @@ flutter run -d chrome
 flutter pub get
 dart format --output=none --set-exit-if-changed .
 dart analyze
-dart test test/dart
-flutter test test/flutter
+flutter test
 dart doc
 
 cd example
