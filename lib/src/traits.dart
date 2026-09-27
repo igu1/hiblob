@@ -1,103 +1,85 @@
-/// Trait reading.
+/// The deterministic trait reader: names in, `[0, 1)` positions out.
 ///
-/// The deterministic trait reader.
-///
-/// Every value is addressed by a string key rather than drawn from a
-/// sequential stream, so trait keys are an append-only namespace: introducing
-/// a new key in a later version leaves every other trait — and therefore every
-/// existing hiblob — untouched.
-///
-/// The one thing that is NOT free to change is the contents of a `pick` array,
-/// since option index is part of the mapping. Those are frozen per major.
+/// Traits are addressed by string key. A name always produces the same value
+/// for a given key, pins replace exactly the keys they name, and adding new
+/// keys later never moves existing ones.
 library;
 
 import 'hash.dart';
+import 'options.dart';
 
-/// Overrides are clamped rather than trusted.
+/// Every trait the layout reads, in roster order.
+const List<String> traitKeys = [
+  'shape',
+  'hue',
+  'tone',
+  'body.r',
+  'body.aspect',
+  'eye.ratio',
+  'eye.spacing',
+  'eye.offset',
+  'face.offset',
+  'detail.a',
+  'detail.b',
+  'detail.c',
+  'detail.phase',
+  'nub.angle',
+];
+
+/// Reads the trait table for [name], with [options] pins applied.
 ///
-/// `pick` and [Traits.intIn] index and floor, so a value of exactly 1 selects
-/// one past the end of a `pick` array and one past `max` — out-of-range
-/// options and counts, from an input that looks entirely reasonable to whoever
-/// typed it. NaN falls to 0 through the same comparison, so a bad parse
-/// renders a hiblob instead of a stack of NaNs.
-///
-/// Each value is the position in [0, 1) that the hash would otherwise have
-/// produced — the same units the layout reads, which makes this a complete
-/// configuration surface rather than a set of escape hatches. A [num] pins the
-/// key to one outcome; a `List<num>` means "any of these", with the key's own
-/// hash choosing among them; an empty list is the same as omitting the key.
-typedef TraitOverrides = Map<String, Object>;
-
-/// A trait reader over one hashed seed.
-class Traits {
-  /// The state the seed hashed into, from [seedState].
-  final int state;
-
-  final Map<String, Object>? _overrides;
-
-  /// Constructs a reader directly from a hashed [state].
-  ///
-  /// Prefer [traitsFor], which hashes and normalizes the seed.
-  Traits(this.state, [Map<String, Object>? overrides]) : _overrides = overrides;
-
-  /// Uniform float in [0, 1).
-  double call(String key) {
-    final Object? v = _overrides?[key];
-    double? o;
-    if (v is List) {
-      // A list is "any of these": the key's own hash is what picks from it —
-      // the same number that would have been the value, spent on the index
-      // instead. An empty list selects nothing and falls through to the hash,
-      // which is deliberate: "nothing selected" and "not configured" are the
-      // same request.
-      if (v.isNotEmpty) {
-        final int index = (stream(state, key) * v.length).floor();
-        final Object? chosen = v[index];
-        if (chosen != null) o = (chosen as num).toDouble();
-      }
-    } else if (v is num) {
-      o = v.toDouble();
+/// When [HiblobOptions.normalize] is on, the name is trimmed and lowercased
+/// before hashing, so `'  ADA '` and `'ada'` hash identically.
+Map<String, double> traitsFor(String name,
+    {HiblobOptions options = const HiblobOptions()}) {
+  final seed = options.normalize ? name.trim().toLowerCase() : name;
+  final traits = {for (final k in traitKeys) k: stream(seed, k)};
+  for (final e in options.traits.entries) {
+    if (traits.containsKey(e.key)) {
+      traits[e.key] = e.value.clamp(0.0, 1.0);
     }
-    // Not `?? o` on the whole expression: an override of 0 is a legitimate
-    // value — it is the bottom of every range — and must not fall through to
-    // the hash. The clamp runs over a list's chosen element too, so a bad
-    // number is clamped wherever it was written.
-    if (o == null) return stream(state, key);
-    if (o > 0) return o < 1 ? o : 0.999999;
-    return 0.0;
   }
-
-  /// Uniform float in [min, max).
-  ///
-  /// Named `numIn` rather than the JS core's `t.num` because a Dart member
-  /// cannot shadow the builtin `num` type (same for `intIn`/`boolIn`).
-  double numIn(String key, double min, double max) =>
-      min + call(key) * (max - min);
-
-  /// Uniform integer from `min` through `max`, inclusive.
-  int intIn(String key, int min, int max) =>
-      min + (call(key) * (max - min + 1)).floor();
-
-  /// Uniform choice. Appending to `options` remaps existing seeds — frozen
-  /// per major.
-  T pick<T>(String key, List<T> options) =>
-      options[(call(key) * options.length).floor()];
-
-  /// True with probability `p`.
-  bool boolIn(String key, [double p = 0.5]) => call(key) < p;
-
-  /// Symmetric jitter in [-amount, amount).
-  double jitter(String key, double amount) => (call(key) * 2 - 1) * amount;
+  if (options.hue != null) {
+    final h = ((options.hue! % 360) + 360) % 360;
+    traits['hue'] = h / 360;
+  }
+  if (options.tone != null) {
+    traits['tone'] = options.tone!.clamp(0.0, 0.999999).toDouble();
+  }
+  return traits;
 }
 
-/// Builds the trait reader for a seed.
-///
-/// The seed is normalized (NFC, trim, lowercase) unless [normalize] is false;
-/// [overrides] pin individual trait keys, keyed exactly as the layout reads
-/// them — `{"eye.gap": 0.82}`.
-Traits traitsFor(
-  String seed, {
-  bool normalize = true,
-  Map<String, Object>? overrides,
-}) =>
-    Traits(seedState(seed, normalize: normalize), overrides);
+/// Maps a position in `[0, 1]` onto the band table [bands] (each entry is
+/// `(start, end)`, end-exclusive except for the final band).
+String bandFor(double value, Map<String, (double, double)> bands) {
+  for (final e in bands.entries) {
+    final (start, end) = e.value;
+    if (value >= start && value < end) return e.key;
+  }
+  return bands.keys.last;
+}
+
+/// The silhouette bands. Everyday shapes get wide bands; loud shapes are a
+/// find. These tables are part of the frozen visual contract: changing a band
+/// moves existing names to different silhouettes.
+const Map<String, (double, double)> shapeBands = {
+  'round': (0.00, 0.200),
+  'organic': (0.200, 0.42),
+  'boxy': (0.42, 0.550),
+  'nub': (0.550, 0.650),
+  'capsule': (0.650, 0.740),
+  'hexagon': (0.740, 0.800),
+  'triangle': (0.800, 0.860),
+  'droplet': (0.860, 0.920),
+  'cloud': (0.920, 0.965),
+  'sun': (0.965, 1.010),
+};
+
+/// The tone bands, pale to ink, partitioned like the silhouette bands.
+const Map<String, (double, double)> toneBands = {
+  'pale': (0.0, 0.20),
+  'soft': (0.20, 0.40),
+  'mid': (0.40, 0.60),
+  'deep': (0.60, 0.80),
+  'ink': (0.80, 1.01),
+};

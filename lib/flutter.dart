@@ -1,50 +1,52 @@
-/// The Flutter widget layer of the hiblob SDK.
+/// The Flutter widget layer of hiblob.
 ///
 /// ```dart
 /// import 'package:hiblob/flutter.dart';
 ///
-/// AnimatedHiblob(name: 'alain@example.com', size: 48)
+/// const Hiblob(name: 'ada@example.com', size: 48);
+///
+/// AnimatedHiblob(
+///   name: 'ada@example.com',
+///   size: 120,
+///   animation: HiblobAnimation.always,
+/// )
 /// ```
 ///
-/// The widgets paint the deterministic layout through
-/// `dart:ui` primitives — the same math the parity fixture pins against the
-/// reference vectors. For the pure, Flutter-independent engine (hash, traits,
-/// palette, layout), import `package:hiblob/hiblob.dart` instead.
+/// The widgets paint the deterministic layout through `dart:ui` primitives.
+/// For the pure, Flutter-independent engine (hash, traits, palette,
+/// geometry, motion), import `package:hiblob/hiblob.dart` instead.
 library;
 
 export 'package:hiblob/hiblob.dart'
     show
         Backdrop,
-        BackdropGeometry,
+        Expression,
+        EyeGroup,
+        GeometryPath,
         HiblobOptions,
-        Palette,
-        Pose,
         MotionFrame,
         MotionSeeds,
-        MotionWrap,
+        ResolvedHiblob,
+        expressions,
+        happy,
+        idle,
+        love,
+        mad,
         motionAt,
         motionSeedsFor,
-        Expression,
-        idle,
-        happy,
-        sad,
-        mad,
-        surprised,
-        wink,
-        sleepy,
-        smug,
-        unsure,
+        PaletteKeys,
+        resolve,
         scared,
-        love,
         shy,
         sick,
+        sleepy,
+        smug,
+        sad,
+        surprised,
         thinking,
-        expressions;
-
-export 'src/flutter/animated_painter.dart' show AnimatedHiblobPainter;
-export 'src/flutter/animated_renderer.dart'
-    show AnimatedHiblobFrame, AnimatedHiblobRenderer;
-export 'src/flutter/animated_widget.dart' show AnimatedHiblob, HiblobAnimation;
-export 'src/flutter/painter.dart' show HiblobPainter;
-export 'src/flutter/renderer.dart' show HiblobRenderer;
-export 'src/flutter/widget.dart' show Hiblob;
+        traitsFor,
+        unsure,
+        wink;
+export 'src/widgets/painter.dart' show AnimatedHiblobPainter, HiblobPainter;
+export 'src/widgets/renderer.dart' show HiblobRenderer, uiPathFrom;
+export 'src/widgets/widget.dart' show AnimatedHiblob, Hiblob, HiblobAnimation;

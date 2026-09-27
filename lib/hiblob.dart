@@ -1,140 +1,70 @@
-/// Deterministic geometric hiblobs from any string — the pure Dart port of
-/// the hiblob engine.
+/// The pure Dart core of hiblob: deterministic geometric blob avatars from
+/// any string.
 ///
-/// The same name always produces the same output within the frozen gen-2
-/// contract. The numeric ranges in `styles/compose.dart`, the bands in
-/// `styles/blob.dart`, and the tone set are all part of that contract.
+/// A hiblob always stands for somebody — a user, a bot, a team, a repo — so
+/// the value it is generated from is that somebody's `name`: a username, a
+/// display name, an email, a handle, an id. Any string works, and the same
+/// string always renders the same hiblob.
 ///
-/// This package is independent of Flutter: the deterministic core (hash,
-/// traits, OKLCh palette, layout geometry) is usable from any Dart program.
-/// Flutter painters and widgets live in `package:hiblob/flutter.dart` and
-/// remain outside this library's dependency boundary.
+/// This library imports neither Flutter nor `dart:ui`, so it runs anywhere
+/// Dart runs. For ready-made Flutter widgets, import
+/// `package:hiblob/flutter.dart` instead — it re-exports everything here.
 ///
-/// Parity: the fixture in `test/fixtures/reference-vectors.json` is a
-/// checked-in, self-describing artifact and the definition of correct this
-/// implementation is checked against.
+/// ```dart
+/// import 'package:hiblob/hiblob.dart';
+///
+/// final traits = traitsFor('ada@example.com');
+/// final figure = resolve('ada@example.com');
+/// final frame = motionAt(motionSeedsFor('ada@example.com'), 1200, ramp: 1);
+/// ```
 library;
 
 export 'src/color.dart'
+    show argbToHex, blendArgb, hexToArgb, hslToArgb, relativeLuminance;
+export 'src/expressions.dart'
     show
-        Oklch,
-        Palette,
-        colorBg,
-        colorHead,
-        colorEye,
-        contrast,
-        ensureContrast,
-        toHex,
-        fromHex,
-        mix,
-        mixHex,
-        fadeHex,
-        Tint,
-        hot,
-        rose,
-        blush,
-        bile,
-        tints,
-        tinted,
-        floors,
-        darkSurface,
-        surfaceFloor,
-        ramp,
-        palette;
-export 'src/hash.dart' show normalizeSeed, seedState, stream, imul, toInt32;
-export 'src/motion.dart'
-    show
-        MotionSeeds,
-        MotionWrap,
-        MotionFrame,
-        motionSeeds,
-        motionSeedsFor,
-        motionAt,
-        cubicBezier,
-        easeInOut,
-        easeIn,
-        easeOut,
-        expressionEnterEase,
-        hoverEase,
-        lerpPose,
-        breatheMilliseconds,
-        bobMilliseconds,
-        thinkingMilliseconds,
-        shakeMilliseconds,
-        expressionEnterMilliseconds,
-        expressionExitMilliseconds,
-        ambientRampMilliseconds,
-        hoverEnterMilliseconds,
-        hoverExitMilliseconds;
-export 'src/expression.dart'
-    show
-        Pose,
         Expression,
-        identityPose,
-        idle,
+        expressions,
         happy,
-        sad,
-        mad,
-        surprised,
-        wink,
-        sleepy,
-        smug,
-        unsure,
-        scared,
+        idle,
         love,
+        mad,
+        scared,
         shy,
         sick,
+        sleepy,
+        smug,
+        sad,
+        surprised,
         thinking,
-        expressions,
-        bakePose,
-        expressionPalette;
-export 'src/render.dart'
+        unsure,
+        wink;
+export 'src/geometry.dart'
     show
-        Backdrop,
-        BackdropGeometry,
-        HiblobOptions,
-        Resolved,
-        backdropFor,
-        layoutFor,
-        partsFor,
-        resolve;
-export 'src/shape.dart'
-    show
-        BlobPath,
-        PathSegment,
-        MoveTo,
-        LineTo,
-        CubicTo,
-        QuadTo,
-        HorizontalLineTo,
-        VerticalLineTo,
         ClosePath,
-        Superellipse,
-        Polygon,
-        superellipse,
-        arc,
-        blobPath,
-        polygon,
-        box,
-        taper;
-export 'src/styles/blob.dart' show bands, style;
-export 'src/styles/compose.dart'
-    show Band, HiblobLayout, HiblobStyle, Eye, faceFit;
-export 'src/styles/shapes.dart'
-    show
-        Body,
-        Deco,
-        Ellipse,
-        Petal,
-        Shape,
-        round,
-        organic,
-        boxy,
-        capsule,
-        nub,
-        cloud,
+        CubicTo,
+        GeometryCommand,
+        GeometryPath,
+        LineTo,
+        MoveTo,
+        Pt,
+        QuadraticTo,
+        RadialWave,
+        circle,
         droplet,
-        hexagon,
-        sun,
-        triangle;
-export 'src/traits.dart' show Traits, TraitOverrides, traitsFor;
+        ellipse,
+        halfDisc,
+        polyline,
+        quad,
+        radialBlob,
+        rotatePt,
+        roundedPolygon,
+        roundedRect,
+        smoothClosed,
+        star,
+        superellipse;
+export 'src/layout.dart' show EyeGroup, ResolvedHiblob, resolve, viewBoxSize;
+export 'src/motion.dart'
+    show MotionFrame, MotionSeeds, motionAt, motionSeedsFor;
+export 'src/options.dart' show Backdrop, HiblobOptions, PaletteKeys;
+export 'src/traits.dart' show shapeBands, toneBands, traitKeys, traitsFor;
