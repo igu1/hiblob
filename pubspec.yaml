@@ -3,8 +3,9 @@ description: >-
   Deterministic geometric blob avatars from any string, with a pure Dart core
   and static or animated Flutter widgets.
 version: 0.1.0
-# TODO: add your own homepage / repository URLs before publishing — pub.dev
-# rewards packages that point at a live repository.
+homepage: https://github.com/igu1/hiblob
+repository: https://github.com/igu1/hiblob
+issue_tracker: https://github.com/igu1/hiblob/issues
 topics:
   - avatar
   - flutter
