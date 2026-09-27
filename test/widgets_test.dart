@@ -25,9 +25,17 @@ Future<Uint8List> _pngOf(WidgetTester tester, Key key) async {
         )
         .first,
   );
-  final image = await boundary.toImage(pixelRatio: 1);
-  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  return bytes!.buffer.asUint8List();
+  // Rasterization needs real async time on the test binding; inside
+  // `runAsync`, consecutive captures on the same boundary complete reliably.
+  // A leading pump flushes pending repaints scheduled by the previous frame's
+  // listeners before the boundary is snapshotted.
+  await tester.pump();
+  final ui.Image image = await tester.runAsync<ui.Image>(
+    () => boundary.toImage(pixelRatio: 1),
+  ) as ui.Image;
+  final ByteData? data = await tester.runAsync<ByteData?>(
+      () => image.toByteData(format: ui.ImageByteFormat.png));
+  return data!.buffer.asUint8List();
 }
 
 void main() {
@@ -62,12 +70,14 @@ void main() {
   });
 
   testWidgets('Hiblob exposes its semantic label', (tester) async {
+    // keep semantics alive only while the widget tree is inspected to avoid
+    // an active SemanticsHandle at end-of-test verification time.
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     await tester.pumpWidget(_wrap(
       const Hiblob(name: 'ada', size: 48, semanticLabel: 'Avatar of Ada'),
     ));
     expect(find.bySemanticsLabel('Avatar of Ada'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('AnimatedHiblob moves over time', (tester) async {
@@ -140,12 +150,16 @@ void main() {
     await gesture.addPointer(location: Offset.zero);
     addTearDown(gesture.removePointer);
     await gesture.moveTo(tester.getCenter(find.byKey(key)));
-    await tester.pump(const Duration(milliseconds: 400));
+    // Hover-mode ticker never settles while hovering, so ramp in with
+    // explicit pumps: dispatch, ramp progress, then the repaint.
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
     final hovered = await _pngOf(tester, key);
     expect(hovered, isNot(idle));
 
     await gesture.moveTo(const Offset(-1000, -1000));
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     final left = await _pngOf(tester, key);
     expect(left, isNot(hovered));
   });

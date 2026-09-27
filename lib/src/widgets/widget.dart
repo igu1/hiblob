@@ -207,7 +207,7 @@ class _AnimatedHiblobState extends State<AnimatedHiblob>
       ..value = widget.animation == HiblobAnimation.always ? 1.0 : 0.0;
     _fade = AnimationController(vsync: this, duration: _fadeDuration)
       ..value = 1.0;
-    _ticker = createTicker(_onTick)..start();
+    _ticker = createTicker(_onTick);
   }
 
   bool get _reducedMotion =>
@@ -217,6 +217,19 @@ class _AnimatedHiblobState extends State<AnimatedHiblob>
       widget.active &&
       !_reducedMotion &&
       (widget.animation == HiblobAnimation.always || _hovering);
+
+  /// Starts the ambient ticker only while motion should advance so an idle
+  /// or off-screen widget schedules no frames at all.
+  void _syncTicker() {
+    if (_shouldAdvance) {
+      if (!_ticker.isActive) {
+        _lastTick = null;
+        _ticker.start();
+      }
+    } else if (_ticker.isActive) {
+      _ticker.stop();
+    }
+  }
 
   void _onTick(Duration elapsed) {
     final last = _lastTick;
@@ -231,6 +244,7 @@ class _AnimatedHiblobState extends State<AnimatedHiblob>
     if (widget.animation == HiblobAnimation.hover && !_reducedMotion) {
       _ramp.forward();
     }
+    _syncTicker();
   }
 
   void _onExit(PointerEvent _) {
@@ -238,6 +252,7 @@ class _AnimatedHiblobState extends State<AnimatedHiblob>
     if (widget.animation == HiblobAnimation.hover) {
       _ramp.reverse();
     }
+    _syncTicker();
   }
 
   @override
@@ -255,10 +270,13 @@ class _AnimatedHiblobState extends State<AnimatedHiblob>
         _ramp.reverse();
       }
     }
+    _syncTicker();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Reads MediaQuery, so reduced-motion changes re-enter here.
+    _syncTicker();
     final painter = AnimatedHiblobPainter(
       renderer: _renderer,
       previous: _previous,
